@@ -1,0 +1,187 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"github.com/nais/elector/controllers/leader_election"
+	"github.com/nais/elector/pkg/election"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
+	electormetrics "github.com/nais/elector/pkg/metrics"
+	log "github.com/sirupsen/logrus"
+	flag "github.com/spf13/pflag"
+	"github.com/spf13/viper"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	_ "net/http/pprof" // Enable http profiling
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
+)
+
+var scheme = runtime.NewScheme()
+
+const (
+	ExitOK = iota
+	ExitController
+	ExitConfig
+	ExitRuntime
+	ExitCredentialsManager
+)
+
+// Configuration options
+const (
+	KubernetesWriteRetryInterval = "kubernetes-write-retry-interval"
+	LogFormat                    = "log-format"
+	LogLevel                     = "log-level"
+	MetricsAddress               = "metrics-address"
+	SyncPeriod                   = "sync-period"
+)
+
+const (
+	LogFormatJSON = "json"
+	LogFormatText = "text"
+)
+
+func init() {
+
+	// Automatically read configuration options from environment variables.
+	// i.e. --metrics-address will be configurable using ELECTOR_AIVEN_TOKEN.
+	viper.SetEnvPrefix("elector")
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
+
+	flag.String(MetricsAddress, "127.0.0.1:8080", "The address the metric endpoint binds to.")
+	flag.String(LogFormat, "text", "Log format, either \"text\" or \"json\"")
+	flag.String(LogLevel, "info", logLevelHelp())
+	flag.Duration(KubernetesWriteRetryInterval, time.Second*10, "Requeueing interval when Kubernetes writes fail")
+	flag.Duration(SyncPeriod, time.Hour*1, "How often to re-synchronize all AivenApplication resources including credential rotation")
+
+	flag.Parse()
+
+	err := viper.BindPFlags(flag.CommandLine)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func logLevelHelp() string {
+	help := strings.Builder{}
+	help.WriteString("Log level, one of: ")
+	notFirst := false
+	for _, level := range log.AllLevels {
+		if notFirst {
+			help.WriteString(", ")
+		}
+		help.WriteString(fmt.Sprintf("\"%s\"", level.String()))
+		notFirst = true
+	}
+	return help.String()
+}
+
+func formatter(logFormat string) (log.Formatter, error) {
+	switch logFormat {
+	case LogFormatJSON:
+		return &log.JSONFormatter{
+			TimestampFormat:   time.RFC3339Nano,
+			DisableHTMLEscape: true,
+		}, nil
+	case LogFormatText:
+		return &log.TextFormatter{
+			FullTimestamp:   true,
+			TimestampFormat: time.RFC3339Nano,
+		}, nil
+	}
+	return nil, fmt.Errorf("unsupported log format '%s'", logFormat)
+}
+
+func main() {
+	logger := log.New()
+	logfmt, err := formatter(viper.GetString(LogFormat))
+	if err != nil {
+		logger.Error(err)
+		os.Exit(ExitConfig)
+	}
+
+	logger.SetFormatter(logfmt)
+	level, err := log.ParseLevel(viper.GetString(LogLevel))
+	if err != nil {
+		logger.Error(err)
+		os.Exit(ExitConfig)
+	}
+	logger.SetLevel(level)
+
+	syncPeriod := viper.GetDuration(SyncPeriod)
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		SyncPeriod:         &syncPeriod,
+		Scheme:             scheme,
+		MetricsBindAddress: viper.GetString(MetricsAddress),
+	})
+
+	if err != nil {
+		logger.Errorln(err)
+		os.Exit(ExitController)
+	}
+
+	logger.Info("elector running")
+	terminator := context.Background()
+	electionResults := make(chan string)
+
+	if err := manageLeases(logger, mgr, electionResults); err != nil {
+		logger.Errorln(err)
+		os.Exit(ExitCredentialsManager)
+	}
+
+	electionManager := election.NewManager(logger, electionResults)
+	err = mgr.Add(manager.RunnableFunc(electionManager.Run))
+	if err != nil {
+		logger.Errorln(err)
+		os.Exit(ExitController)
+	}
+
+	go func() {
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
+
+		for {
+			select {
+			case sig := <-signals:
+				logger.Infof("exiting due to signal: %s", strings.ToUpper(sig.String()))
+				os.Exit(ExitOK)
+			}
+		}
+	}()
+
+	if err := mgr.Start(terminator); err != nil {
+		logger.Errorln(fmt.Errorf("manager stopped unexpectedly: %s", err))
+		os.Exit(ExitRuntime)
+	}
+
+	logger.Errorln(fmt.Errorf("manager has stopped"))
+}
+
+func manageLeases(logger *log.Logger, mgr manager.Manager, electionResults chan<- string) error {
+	reconciler := leader_election.NewReconciler(mgr, logger, electionResults)
+
+	if err := reconciler.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to set up reconciler: %s", err)
+	}
+	logger.Info("Lease reconciler setup complete")
+
+	return nil
+}
+
+func init() {
+	err := clientgoscheme.AddToScheme(scheme)
+	if err != nil {
+		panic(err)
+	}
+
+	electormetrics.Register(metrics.Registry)
+	// +kubebuilder:scaffold:scheme
+}
