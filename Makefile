@@ -10,9 +10,8 @@ elector:
 test:
 	go test ./... -count=1 -coverprofile cover.out -short
 
-mocks:
-	cd pkg && mockery --all --case snake
-	cd controllers && mockery --all --case snake
+integration_test: kubebuilder
+	go test ./pkg/election/... -tags=integration -v -count=1
 
 kubebuilder: $(testbin_dir)/$(tools_archive)
 	tar -xzf $(testbin_dir)/$(tools_archive) --strip-components=2 -C $(testbin_dir)

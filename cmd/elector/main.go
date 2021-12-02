@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/nais/elector/controllers/leader_election"
 	"github.com/nais/elector/pkg/election"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/clock"
 	"os"
 	"os/signal"
 	"strings"
@@ -17,8 +18,6 @@ import (
 	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	_ "net/http/pprof" // Enable http profiling
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -31,16 +30,13 @@ const (
 	ExitController
 	ExitConfig
 	ExitRuntime
-	ExitCredentialsManager
 )
 
 // Configuration options
 const (
-	KubernetesWriteRetryInterval = "kubernetes-write-retry-interval"
-	LogFormat                    = "log-format"
-	LogLevel                     = "log-level"
-	MetricsAddress               = "metrics-address"
-	SyncPeriod                   = "sync-period"
+	LogFormat      = "log-format"
+	LogLevel       = "log-level"
+	MetricsAddress = "metrics-address"
 )
 
 const (
@@ -59,8 +55,6 @@ func init() {
 	flag.String(MetricsAddress, "127.0.0.1:8080", "The address the metric endpoint binds to.")
 	flag.String(LogFormat, "text", "Log format, either \"text\" or \"json\"")
 	flag.String(LogLevel, "info", logLevelHelp())
-	flag.Duration(KubernetesWriteRetryInterval, time.Second*10, "Requeueing interval when Kubernetes writes fail")
-	flag.Duration(SyncPeriod, time.Hour*1, "How often to re-synchronize all AivenApplication resources including credential rotation")
 
 	flag.Parse()
 
@@ -116,9 +110,7 @@ func main() {
 	}
 	logger.SetLevel(level)
 
-	syncPeriod := viper.GetDuration(SyncPeriod)
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		SyncPeriod:         &syncPeriod,
 		Scheme:             scheme,
 		MetricsBindAddress: viper.GetString(MetricsAddress),
 	})
@@ -132,9 +124,17 @@ func main() {
 	terminator := context.Background()
 	electionResults := make(chan string)
 
-	if err := manageLeases(logger, mgr, electionResults); err != nil {
+	candidate := election.Candidate{
+		Clock:           &clock.RealClock{},
+		Logger:          logger,
+		ElectionResults: electionResults,
+		ElectionName:    types.NamespacedName{}, // TODO: Read NAIS_APP and NAIS_NAMESPACE from env
+	}
+
+	err = mgr.Add(&candidate)
+	if err != nil {
 		logger.Errorln(err)
-		os.Exit(ExitCredentialsManager)
+		os.Exit(ExitController)
 	}
 
 	electionManager := election.NewManager(logger, electionResults)
@@ -163,17 +163,6 @@ func main() {
 	}
 
 	logger.Errorln(fmt.Errorf("manager has stopped"))
-}
-
-func manageLeases(logger *log.Logger, mgr manager.Manager, electionResults chan<- string) error {
-	reconciler := leader_election.NewReconciler(mgr, logger, electionResults)
-
-	if err := reconciler.SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("unable to set up reconciler: %s", err)
-	}
-	logger.Info("Lease reconciler setup complete")
-
-	return nil
 }
 
 func init() {
