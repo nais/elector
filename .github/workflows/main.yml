@@ -3,7 +3,7 @@ name: Build and deploy elector
 on: [push]
 
 env:
-  image_base: ghcr.io/${{ github.repository }}/elector
+  image_base: ghcr.io/${{ github.repository }}
 
 jobs:
   build:
@@ -34,5 +34,37 @@ jobs:
     outputs:
       image: "${{ steps.set-image-tag.outputs.image }}"
       version: "${{ steps.set-image-tag.outputs.version }}"
-
-# TODO: How do we deploy new version of sidecar? Look to wonderwall
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    env:
+      VERSION: "${{ needs.setup.outputs.version }}"
+      ELECTOR_IMAGE: "${{ needs.setup.outputs.image }}"
+    steps:
+      - uses: navikt/github-app-token-generator@v1
+        id: get-token
+        if: github.ref == 'refs/heads/master'
+        with:
+          private-key: ${{ secrets.NAIS_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.NAIS_APP_ID }}
+          repo: navikt/nais-yaml
+      - name: Checkout nais-yaml
+        if: github.ref == 'refs/heads/master'
+        uses: actions/checkout@v2
+        with:
+          repository: navikt/nais-yaml
+          token: ${{ steps.get-token.outputs.token }}
+          path: nais-yaml
+      - name: Update nais-yaml
+        if: github.ref == 'refs/heads/master'
+        run: |
+          cd nais-yaml
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+          sed -E -i "s#elector_image:.+#elector_image: ${{ env.ELECTOR_IMAGE }}#" vars/global.yaml
+          git add .
+          git --no-pager diff --cached
+          git commit -a -m "Bump Elector image version ${{ env.VERSION }}"
+          git push
