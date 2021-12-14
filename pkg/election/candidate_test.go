@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/clock"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/pointer"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,13 +30,18 @@ const (
 	namespace    = "test-namespace"
 	electionName = "test-election"
 	testUID      = "test-uuid"
+	notMe        = "not-my-hostname"
 )
 
 type testRig struct {
-	t          *testing.T
-	kubernetes *envtest.Environment
-	client     client.Client
-	manager    ctrl.Manager
+	t               *testing.T
+	kubernetes      *envtest.Environment
+	client          client.Client
+	manager         ctrl.Manager
+	hostname        string
+	candidate       Candidate
+	electionResults chan string
+	fakeClock       clock.FakeClock
 }
 
 func testBinDirectory() string {
@@ -93,70 +99,61 @@ func newTestRig(t *testing.T) (*testRig, error) {
 	}()
 	rig.client = rig.manager.GetClient()
 
-	return rig, nil
-}
-
-func (r testRig) assertExists(ctx context.Context, resource client.Object, objectKey client.ObjectKey) {
-	r.t.Helper()
-	err := r.client.Get(ctx, objectKey, resource)
-	assert.NoError(r.t, err)
-	assert.NotNil(r.t, resource)
-}
-
-func (r testRig) assertNotExists(ctx context.Context, resource client.Object, objectKey client.ObjectKey) {
-	r.t.Helper()
-	err := r.client.Get(ctx, objectKey, resource)
-	assert.True(r.t, errors.IsNotFound(err), "the resource found in the cluster should not be there")
-}
-
-func (r testRig) createForTest(ctx context.Context, obj client.Object) {
-	kind := obj.DeepCopyObject().GetObjectKind()
-	r.t.Logf("Creating %s", describe(obj))
-	if err := r.client.Create(ctx, obj); err != nil {
-		r.t.Fatalf("resource %s cannot be persisted to fake Kubernetes: %s", describe(obj), err)
-		return
-	}
-	// Create clears GVK for whatever reason, so we add it back here, so we can continue to use this object
-	obj.GetObjectKind().SetGroupVersionKind(kind.GroupVersionKind())
-	r.t.Cleanup(func() {
-		r.t.Logf("Deleting %s", describe(obj))
-		if err := r.client.Delete(ctx, obj); err != nil {
-			r.t.Errorf("failed to delete resource %s: %s", describe(obj), err)
-		}
-	})
-}
-
-func TestCandidate_WinElection(t *testing.T) {
-	rig, err := newTestRig(t)
-	if err != nil {
-		t.Errorf("unable to run controller integration tests: %s", err)
-		t.FailNow()
-	}
-
 	hostname, err := os.Hostname()
 	if err != nil {
 		t.Errorf("unable to get hostname: %v", err)
 		t.FailNow()
 	}
+	rig.hostname = hostname
 
-	electionResults := make(chan string)
+	rig.electionResults = make(chan string)
 
-	fakeClock := clock.FakeClock{}
-	candidate := Candidate{
+	rig.fakeClock = clock.FakeClock{}
+	rig.candidate = Candidate{
 		Client:          rig.client,
-		Clock:           &fakeClock,
+		Clock:           &rig.fakeClock,
 		Logger:          logrus.New(),
-		ElectionResults: electionResults,
+		ElectionResults: rig.electionResults,
 		ElectionName: types.NamespacedName{
 			Namespace: namespace,
 			Name:      electionName,
 		},
 	}
 
-	// Allow 15 seconds for test to complete
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	t.Cleanup(cancel)
+	return rig, nil
+}
 
+func (rig testRig) assertExists(ctx context.Context, resource client.Object, objectKey client.ObjectKey) {
+	rig.t.Helper()
+	err := rig.client.Get(ctx, objectKey, resource)
+	assert.NoError(rig.t, err)
+	assert.NotNil(rig.t, resource)
+}
+
+func (rig testRig) assertNotExists(ctx context.Context, resource client.Object, objectKey client.ObjectKey) {
+	rig.t.Helper()
+	err := rig.client.Get(ctx, objectKey, resource)
+	assert.True(rig.t, errors.IsNotFound(err), "the resource found in the cluster should not be there")
+}
+
+func (rig testRig) createForTest(ctx context.Context, obj client.Object) {
+	kind := obj.DeepCopyObject().GetObjectKind()
+	rig.t.Logf("Creating %s", describe(obj))
+	if err := rig.client.Create(ctx, obj); err != nil {
+		rig.t.Fatalf("resource %s cannot be persisted to fake Kubernetes: %s", describe(obj), err)
+		return
+	}
+	// Create clears GVK for whatever reason, so we add it back here, so we can continue to use this object
+	obj.GetObjectKind().SetGroupVersionKind(kind.GroupVersionKind())
+	rig.t.Cleanup(func() {
+		rig.t.Logf("Deleting %s", describe(obj))
+		if err := rig.client.Delete(ctx, obj); err != nil {
+			rig.t.Errorf("failed to delete resource %s: %s", describe(obj), err)
+		}
+	})
+}
+
+func (rig *testRig) commonSetupForTest(ctx context.Context) {
 	rig.createForTest(ctx, &core_v1.Namespace{
 		ObjectMeta: meta_v1.ObjectMeta{
 			Name: namespace,
@@ -164,7 +161,7 @@ func TestCandidate_WinElection(t *testing.T) {
 	})
 	rig.createForTest(ctx, &core_v1.Pod{
 		ObjectMeta: meta_v1.ObjectMeta{
-			Name:      hostname,
+			Name:      rig.hostname,
 			Namespace: namespace,
 			UID:       testUID,
 		},
@@ -177,11 +174,92 @@ func TestCandidate_WinElection(t *testing.T) {
 			},
 		},
 	})
+}
 
-	rig.assertNotExists(ctx, &coordination_v1.Lease{}, candidate.ElectionName)
+func TestCandidate_WinSimpleElection(t *testing.T) {
+	rig, err := newTestRig(t)
+	if err != nil {
+		t.Errorf("unable to run controller integration tests: %s", err)
+		t.FailNow()
+	}
+
+	// Allow 15 seconds for test to complete
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	t.Cleanup(cancel)
+
+	rig.commonSetupForTest(ctx)
+	rig.assertNotExists(ctx, &coordination_v1.Lease{}, rig.candidate.ElectionName)
+
+	run(t, rig, ctx)
+
+	select {
+	case <-ctx.Done():
+		t.Logf("Context closed while waiting for results: %v", ctx.Err())
+		t.FailNow()
+	case result := <-rig.electionResults:
+		assert.Equal(t, rig.hostname, result)
+	}
+}
+
+func TestCandidate_WinRaceToElection(t *testing.T) {
+	rig, err := newTestRig(t)
+	if err != nil {
+		t.Errorf("unable to run controller integration tests: %s", err)
+		t.FailNow()
+	}
+
+	// Allow 15 seconds for test to complete
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	t.Cleanup(cancel)
+
+	rig.commonSetupForTest(ctx)
+	lease := coordination_v1.Lease{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name:      rig.candidate.ElectionName.Name,
+			Namespace: rig.candidate.ElectionName.Namespace,
+		},
+		Spec: coordination_v1.LeaseSpec{
+			HolderIdentity: pointer.String(notMe),
+			AcquireTime: &meta_v1.MicroTime{
+				Time: time.Now(),
+			},
+		},
+	}
+	rig.createForTest(ctx, &lease)
+	rig.assertExists(ctx, &coordination_v1.Lease{}, rig.candidate.ElectionName)
 
 	go func() {
-		err := candidate.Start(ctx)
+		time.Sleep(1 * time.Second)
+		t.Log("Deleting existing lease")
+		err := rig.client.Delete(ctx, &lease)
+		if err != nil {
+			t.Errorf("failed to delete lease")
+			cancel()
+		}
+		rig.fakeClock.Step(1 * time.Minute)
+	}()
+
+	run(t, rig, ctx)
+
+	select {
+	case <-ctx.Done():
+		t.Logf("Context closed while waiting for results: %v", ctx.Err())
+		t.FailNow()
+	case result := <-rig.electionResults:
+		assert.Equal(t, notMe, result)
+		select {
+		case <-ctx.Done():
+			t.Logf("Context closed while waiting for results: %v", ctx.Err())
+			t.FailNow()
+		case result := <-rig.electionResults:
+			assert.Equal(t, rig.hostname, result)
+		}
+	}
+}
+
+func run(t *testing.T, rig *testRig, ctx context.Context) {
+	go func() {
+		err := rig.candidate.Start(ctx)
 		switch {
 		case err == context.Canceled:
 			return
@@ -189,14 +267,6 @@ func TestCandidate_WinElection(t *testing.T) {
 			t.Errorf("candidate errored out: %v", err)
 		}
 	}()
-
-	select {
-	case <-ctx.Done():
-		t.Logf("Context closed while waiting for results: %v", ctx.Err())
-		t.FailNow()
-	case result := <-electionResults:
-		assert.Equal(t, candidate.hostname, result)
-	}
 }
 
 func describe(obj client.Object) string {
