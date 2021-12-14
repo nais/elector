@@ -11,6 +11,7 @@ import (
 type Manager struct {
 	Logger          logrus.FieldLogger
 	ElectionResults <-chan string
+	ElectionAddress string
 	lastResult      result
 }
 
@@ -37,7 +38,8 @@ func (m *Manager) Start(ctx context.Context) error {
 	http.HandleFunc("/", leaderHandler)
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
-		err := http.ListenAndServe("localhost:6060", nil) // TODO: Read addr from cmd-line
+		m.Logger.Infof("Starting election service on %s", m.ElectionAddress)
+		err := http.ListenAndServe(m.ElectionAddress, nil)
 		m.Logger.Errorf("Failed to serve: %v", err)
 		cancel()
 	}()
@@ -51,6 +53,7 @@ func (m *Manager) Start(ctx context.Context) error {
 				Name:       name,
 				LastUpdate: time.Now().Format(time.RFC3339),
 			}
+			m.Logger.Debugf("Updated election results. Current leader: %s", name)
 		}
 	}
 }

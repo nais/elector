@@ -33,9 +33,12 @@ const (
 
 // Configuration options
 const (
-	LogFormat      = "log-format"
-	LogLevel       = "log-level"
-	MetricsAddress = "metrics-address"
+	LogFormat         = "log-format"
+	LogLevel          = "log-level"
+	MetricsAddress    = "metrics-address"
+	ElectionAddress   = "http"
+	ElectionName      = "election"
+	ElectionNamespace = "election-namespace"
 )
 
 const (
@@ -52,6 +55,9 @@ func init() {
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 
 	flag.String(MetricsAddress, "127.0.0.1:8080", "The address the metric endpoint binds to.")
+	flag.String(ElectionAddress, "127.0.0.1:6060", "The address the election endpoints binds to.")
+	flag.String(ElectionName, "", "The election name to take part in.")
+	flag.String(ElectionNamespace, "", "The namespace the election is run in.")
 	flag.String(LogFormat, "text", "Log format, either \"text\" or \"json\"")
 	flag.String(LogLevel, "info", logLevelHelp())
 
@@ -109,6 +115,16 @@ func main() {
 	}
 	logger.SetLevel(level)
 
+	electionName := types.NamespacedName{
+		Namespace: viper.GetString(ElectionNamespace),
+		Name:      viper.GetString(ElectionName),
+	}
+
+	if electionName.Name == "" || electionName.Namespace == "" {
+		logger.Error(fmt.Errorf("both --election and --election-namespace are required options (sic)"))
+		os.Exit(ExitConfig)
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: viper.GetString(MetricsAddress),
@@ -127,7 +143,7 @@ func main() {
 		Clock:           &clock.RealClock{},
 		Logger:          logger,
 		ElectionResults: electionResults,
-		ElectionName:    types.NamespacedName{}, // TODO: Read election name from cmd-line
+		ElectionName:    electionName,
 	}
 
 	err = mgr.Add(&candidate)
@@ -139,6 +155,7 @@ func main() {
 	electionManager := election.Manager{
 		Logger:          logger,
 		ElectionResults: electionResults,
+		ElectionAddress: viper.GetString(ElectionAddress),
 	}
 
 	err = mgr.Add(&electionManager)

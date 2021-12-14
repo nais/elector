@@ -42,7 +42,7 @@ func (c *Candidate) Start(ctx context.Context) error {
 			return err
 		}
 		if lease == nil {
-			c.Logger.Infof("No existing Lease, running campaign for %v", c.ElectionName)
+			c.Logger.Debugf("No existing Lease, running campaign for %v", c.ElectionName)
 			lease, err = c.runCampaign(ctx)
 			if err != nil {
 				return err
