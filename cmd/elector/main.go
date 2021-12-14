@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
@@ -128,7 +127,7 @@ func main() {
 		Clock:           &clock.RealClock{},
 		Logger:          logger,
 		ElectionResults: electionResults,
-		ElectionName:    types.NamespacedName{}, // TODO: Read NAIS_APP and NAIS_NAMESPACE from env
+		ElectionName:    types.NamespacedName{}, // TODO: Read election name from cmd-line
 	}
 
 	err = mgr.Add(&candidate)
@@ -137,8 +136,12 @@ func main() {
 		os.Exit(ExitController)
 	}
 
-	electionManager := election.NewManager(logger, electionResults)
-	err = mgr.Add(manager.RunnableFunc(electionManager.Run))
+	electionManager := election.Manager{
+		Logger:          logger,
+		ElectionResults: electionResults,
+	}
+
+	err = mgr.Add(&electionManager)
 	if err != nil {
 		logger.Errorln(err)
 		os.Exit(ExitController)

@@ -5,32 +5,31 @@ import (
 	"encoding/json"
 	"github.com/sirupsen/logrus"
 	"net/http"
+	"time"
 )
 
 type Manager struct {
-	Name            string `json:"name,omitempty"`
-	logger          logrus.FieldLogger
-	electionResults <-chan string
+	Logger          logrus.FieldLogger
+	ElectionResults <-chan string
+	lastResult      result
 }
 
-func NewManager(logger logrus.FieldLogger, electionResults <-chan string) Manager {
-	return Manager{
-		logger:          logger,
-		electionResults: electionResults,
-	}
+type result struct {
+	Name       string `json:"name,omitempty"`
+	LastUpdate string `json:"last_update,omitempty"`
 }
 
-func (m *Manager) Run(ctx context.Context) error {
+func (m *Manager) Start(ctx context.Context) error {
 	leaderHandler := func(w http.ResponseWriter, req *http.Request) {
-		bytes, err := json.Marshal(m)
+		bytes, err := json.Marshal(m.lastResult)
 		if err != nil {
-			m.logger.Errorf("failed to marshal JSON response: %v", err)
+			m.Logger.Errorf("failed to marshal JSON response: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		_, err = w.Write(bytes)
 		if err != nil {
-			m.logger.Errorf("failed to write response: %v", err)
+			m.Logger.Errorf("failed to write response: %v", err)
 			return
 		}
 	}
@@ -38,8 +37,8 @@ func (m *Manager) Run(ctx context.Context) error {
 	http.HandleFunc("/", leaderHandler)
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
-		err := http.ListenAndServe("localhost:6060", nil)
-		m.logger.Errorf("Failed to serve: %v", err)
+		err := http.ListenAndServe("localhost:6060", nil) // TODO: Read addr from cmd-line
+		m.Logger.Errorf("Failed to serve: %v", err)
 		cancel()
 	}()
 
@@ -47,7 +46,11 @@ func (m *Manager) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case m.Name = <-m.electionResults:
+		case name := <-m.ElectionResults:
+			m.lastResult = result{
+				Name:       name,
+				LastUpdate: time.Now().Format(time.RFC3339),
+			}
 		}
 	}
 }
