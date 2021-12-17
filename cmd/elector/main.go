@@ -103,14 +103,14 @@ func main() {
 	logger := log.New()
 	logfmt, err := formatter(viper.GetString(LogFormat))
 	if err != nil {
-		logger.Error(err)
+		logger.Error(fmt.Errorf("unable to configure log formatter: %w", err))
 		os.Exit(ExitConfig)
 	}
 
 	logger.SetFormatter(logfmt)
 	level, err := log.ParseLevel(viper.GetString(LogLevel))
 	if err != nil {
-		logger.Error(err)
+		logger.Error(fmt.Errorf("unable to parse loglevel: %w", err))
 		os.Exit(ExitConfig)
 	}
 	logger.SetLevel(level)
@@ -129,9 +129,8 @@ func main() {
 		Scheme:             scheme,
 		MetricsBindAddress: viper.GetString(MetricsAddress),
 	})
-
 	if err != nil {
-		logger.Errorln(err)
+		logger.Error(fmt.Errorf("failed to start controller-runtime manager: %w", err))
 		os.Exit(ExitController)
 	}
 
@@ -148,7 +147,7 @@ func main() {
 
 	err = mgr.Add(&candidate)
 	if err != nil {
-		logger.Errorln(err)
+		logger.Error(fmt.Errorf("failed to add candidate to controller-runtime manager: %w", err))
 		os.Exit(ExitController)
 	}
 
@@ -160,7 +159,7 @@ func main() {
 
 	err = mgr.Add(&electionManager)
 	if err != nil {
-		logger.Errorln(err)
+		logger.Error(fmt.Errorf("failed to add election manager to controller-runtime manager: %w", err))
 		os.Exit(ExitController)
 	}
 
@@ -178,11 +177,11 @@ func main() {
 	}()
 
 	if err := mgr.Start(terminator); err != nil {
-		logger.Errorln(fmt.Errorf("manager stopped unexpectedly: %s", err))
+		logger.Error(fmt.Errorf("manager stopped unexpectedly: %s", err))
 		os.Exit(ExitRuntime)
 	}
 
-	logger.Errorln(fmt.Errorf("manager has stopped"))
+	logger.Error(fmt.Errorf("manager has stopped"))
 }
 
 func init() {
