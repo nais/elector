@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/nais/elector/pkg/election"
+	"github.com/nais/elector/pkg/logging"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"os"
@@ -26,8 +27,10 @@ var scheme = runtime.NewScheme()
 
 const (
 	ExitOK = iota
-	ExitController
 	ExitConfig
+	ExitManagerCreation
+	ExitCandidateAdded
+	ExitElectionAdded
 	ExitRuntime
 )
 
@@ -115,6 +118,8 @@ func main() {
 	}
 	logger.SetLevel(level)
 
+	logger.Infof("Logging configured")
+
 	electionName := types.NamespacedName{
 		Namespace: viper.GetString(ElectionNamespace),
 		Name:      viper.GetString(ElectionName),
@@ -128,10 +133,11 @@ func main() {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: viper.GetString(MetricsAddress),
+		Logger:             &logging.Logrus2Logr{Logger: logger},
 	})
 	if err != nil {
 		logger.Error(fmt.Errorf("failed to start controller-runtime manager: %w", err))
-		os.Exit(ExitController)
+		os.Exit(ExitManagerCreation)
 	}
 
 	logger.Info("elector running")
@@ -148,7 +154,7 @@ func main() {
 	err = mgr.Add(&candidate)
 	if err != nil {
 		logger.Error(fmt.Errorf("failed to add candidate to controller-runtime manager: %w", err))
-		os.Exit(ExitController)
+		os.Exit(ExitCandidateAdded)
 	}
 
 	electionManager := election.Manager{
@@ -160,7 +166,7 @@ func main() {
 	err = mgr.Add(&electionManager)
 	if err != nil {
 		logger.Error(fmt.Errorf("failed to add election manager to controller-runtime manager: %w", err))
-		os.Exit(ExitController)
+		os.Exit(ExitElectionAdded)
 	}
 
 	go func() {
