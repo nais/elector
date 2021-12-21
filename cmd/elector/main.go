@@ -31,7 +31,7 @@ const (
 	ExitManagerCreation
 	ExitManagerHealth
 	ExitCandidateAdded
-	ExitElectionAdded
+	ExitOfficialAdded
 	ExitRuntime
 )
 
@@ -159,16 +159,10 @@ func main() {
 		os.Exit(ExitCandidateAdded)
 	}
 
-	electionManager := election.Manager{
-		Logger:          logger,
-		ElectionResults: electionResults,
-		ElectionAddress: viper.GetString(ElectionAddress),
-	}
-
-	err = mgr.Add(&electionManager)
+	err = election.AddOfficialToManager(mgr, logger, electionResults, viper.GetString(ElectionAddress))
 	if err != nil {
-		logger.Error(fmt.Errorf("failed to add election manager to controller-runtime manager: %w", err))
-		os.Exit(ExitElectionAdded)
+		logger.Error(fmt.Errorf("failed to add election official to controller-runtime manager: %w", err))
+		os.Exit(ExitOfficialAdded)
 	}
 
 	go func() {
