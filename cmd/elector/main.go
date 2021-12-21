@@ -6,9 +6,9 @@ import (
 	"github.com/nais/elector/pkg/election"
 	"github.com/nais/elector/pkg/logging"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/clock"
 	"os"
 	"os/signal"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"strings"
 	"syscall"
 	"time"
@@ -29,6 +29,7 @@ const (
 	ExitOK = iota
 	ExitConfig
 	ExitManagerCreation
+	ExitManagerHealth
 	ExitCandidateAdded
 	ExitElectionAdded
 	ExitRuntime
@@ -39,6 +40,7 @@ const (
 	LogFormat         = "log-format"
 	LogLevel          = "log-level"
 	MetricsAddress    = "metrics-address"
+	ProbeAddress      = "probe-address"
 	ElectionAddress   = "http"
 	ElectionName      = "election"
 	ElectionNamespace = "election-namespace"
@@ -57,8 +59,9 @@ func init() {
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 
-	flag.String(MetricsAddress, "127.0.0.1:8080", "The address the metric endpoint binds to.")
-	flag.String(ElectionAddress, "127.0.0.1:6060", "The address the election endpoints binds to.")
+	flag.String(MetricsAddress, "0.0.0.0:9090", "The address the metric endpoint binds to.")
+	flag.String(ProbeAddress, "0.0.0.0:8080", "The address the probe endpoints binds to.")
+	flag.String(ElectionAddress, "0.0.0.0:6060", "The address the election endpoints binds to.")
 	flag.String(ElectionName, "", "The election name to take part in.")
 	flag.String(ElectionNamespace, "", "The namespace the election is run in.")
 	flag.String(LogFormat, "text", "Log format, either \"text\" or \"json\"")
@@ -131,29 +134,28 @@ func main() {
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: viper.GetString(MetricsAddress),
-		Logger:             &logging.Logrus2Logr{Logger: logger},
+		Scheme:                 scheme,
+		MetricsBindAddress:     viper.GetString(MetricsAddress),
+		HealthProbeBindAddress: viper.GetString(ProbeAddress),
+		Logger:                 &logging.Logrus2Logr{Logger: logger},
 	})
 	if err != nil {
 		logger.Error(fmt.Errorf("failed to start controller-runtime manager: %w", err))
 		os.Exit(ExitManagerCreation)
+	}
+	err = mgr.AddHealthzCheck("manager", healthz.Ping)
+	if err != nil {
+		logger.Error(fmt.Errorf("failed to add default liveness: %w", err))
+		os.Exit(ExitManagerHealth)
 	}
 
 	logger.Info("elector running")
 	terminator := context.Background()
 	electionResults := make(chan string)
 
-	candidate := election.Candidate{
-		Clock:           &clock.RealClock{},
-		Logger:          logger,
-		ElectionResults: electionResults,
-		ElectionName:    electionName,
-	}
-
-	err = mgr.Add(&candidate)
+	err = election.AddCandidateToManager(mgr, logger, electionResults, electionName)
 	if err != nil {
-		logger.Error(fmt.Errorf("failed to add candidate to controller-runtime manager: %w", err))
+		logger.Error(err)
 		os.Exit(ExitCandidateAdded)
 	}
 

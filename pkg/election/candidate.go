@@ -11,8 +11,12 @@ import (
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/clock"
+	"net/http"
 	"os"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sync"
 	"time"
 )
 
@@ -23,32 +27,78 @@ type Candidate struct {
 	ElectionResults chan<- string
 	ElectionName    types.NamespacedName
 
-	ownerReference meta_v1.OwnerReference
+	ownerReference *meta_v1.OwnerReference
 	hostname       string
+	setupLock      sync.Mutex
+	campaignLock   sync.Mutex
+}
+
+func AddCandidateToManager(mgr ctrl.Manager, logger logrus.FieldLogger, electionResults chan<- string, electionName types.NamespacedName) error {
+	candidate := Candidate{
+		Client:          mgr.GetClient(),
+		Clock:           &clock.RealClock{},
+		Logger:          logger,
+		ElectionResults: electionResults,
+		ElectionName:    electionName,
+	}
+
+	err := mgr.AddReadyzCheck("candidate", candidate.readyz)
+	if err != nil {
+		return fmt.Errorf("failed to add candidate readiness check to controller-runtime manager: %w", err)
+	}
+
+	err = mgr.Add(&candidate)
+	if err != nil {
+		return fmt.Errorf("failed to add candidate runnable to controller-runtime manager: %w", err)
+	}
+
+	err = ctrl.NewControllerManagedBy(mgr).
+		For(&coordination_v1.Lease{}).
+		Complete(&candidate)
+	if err != nil {
+		return fmt.Errorf("failed to add candidate controller to controller-runtime manager: %w", err)
+	}
+
+	return nil
+}
+
+func (c *Candidate) readyz(_ *http.Request) error {
+	if c.ownerReference == nil {
+		return fmt.Errorf("candidate has not performed setup")
+	}
+	return nil
+}
+
+func (c *Candidate) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
+	if c.ownerReference == nil {
+		err := c.setup(ctx)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to initialize candidate: %w", err)
+		}
+	}
+
+	if request.NamespacedName != c.ElectionName {
+		return ctrl.Result{}, nil
+	}
+
+	return c.checkLease(ctx)
 }
 
 func (c *Candidate) Start(ctx context.Context) error {
-	var err error
-	var lease *coordination_v1.Lease
+	ticker := c.Clock.NewTicker(time.Minute * 1)
 
-	if err = c.setup(ctx); err != nil {
-		return err
+	if c.ownerReference == nil {
+		err := c.setup(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to initialize candidate: %w", err)
+		}
 	}
 
-	ticker := c.Clock.NewTicker(time.Minute * 1)
 	for {
-		c.Logger.Infof("Checking Lease %v", c.ElectionName)
-		if lease, err = c.getLease(ctx); err != nil {
+		_, err := c.checkLease(ctx)
+		if err != nil {
 			return err
 		}
-		if lease == nil {
-			c.Logger.Debugf("No existing Lease, running campaign for %v", c.ElectionName)
-			lease, err = c.runCampaign(ctx)
-			if err != nil {
-				return err
-			}
-		}
-		c.updateElection(lease)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -58,9 +108,23 @@ func (c *Candidate) Start(ctx context.Context) error {
 	}
 }
 
-func (c *Candidate) InjectClient(client client.Client) error {
-	c.Client = client
-	return nil
+func (c *Candidate) checkLease(ctx context.Context) (ctrl.Result, error) {
+	var err error
+	var lease *coordination_v1.Lease
+
+	c.Logger.Debugf("Checking Lease %v", c.ElectionName)
+	if lease, err = c.getLease(ctx); err != nil {
+		return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, err
+	}
+	if lease == nil {
+		c.Logger.Infof("No existing Lease, running campaign for %v", c.ElectionName)
+		lease, err = c.runCampaign(ctx)
+		if err != nil {
+			return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, err
+		}
+	}
+	c.updateElection(lease)
+	return ctrl.Result{}, nil
 }
 
 func (c *Candidate) getLease(ctx context.Context) (*coordination_v1.Lease, error) {
@@ -77,12 +141,15 @@ func (c *Candidate) getLease(ctx context.Context) (*coordination_v1.Lease, error
 }
 
 func (c *Candidate) runCampaign(ctx context.Context) (*coordination_v1.Lease, error) {
+	c.campaignLock.Lock()
+	defer c.campaignLock.Unlock()
+
 	lease := &coordination_v1.Lease{
 		ObjectMeta: meta_v1.ObjectMeta{
 			Name:      c.ElectionName.Name,
 			Namespace: c.ElectionName.Namespace,
 			OwnerReferences: []meta_v1.OwnerReference{
-				c.ownerReference,
+				*c.ownerReference,
 			},
 		},
 		Spec: coordination_v1.LeaseSpec{
@@ -115,11 +182,13 @@ func (c *Candidate) updateElection(lease *coordination_v1.Lease) {
 }
 
 func (c *Candidate) setup(ctx context.Context) error {
+	c.setupLock.Lock()
+	defer c.setupLock.Unlock()
+
 	hostname, err := os.Hostname()
 	if err != nil {
 		return fmt.Errorf("unable to get hostname: %w", err)
 	}
-	c.hostname = hostname
 
 	pod := &core_v1.Pod{}
 
@@ -132,7 +201,8 @@ func (c *Candidate) setup(ctx context.Context) error {
 		return fmt.Errorf("unable to get current Pod: %w", err)
 	}
 
-	c.ownerReference = meta_v1.OwnerReference{
+	c.hostname = hostname
+	c.ownerReference = &meta_v1.OwnerReference{
 		APIVersion: pod.APIVersion,
 		Kind:       pod.Kind,
 		Name:       pod.Name,
