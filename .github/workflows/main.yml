@@ -40,8 +40,8 @@ jobs:
     needs:
       - build
     env:
-      VERSION: "${{ needs.setup.outputs.VERSION }}"
-      ELECTOR_IMAGE: "${{ needs.setup.outputs.ELECTOR_IMAGE }}"
+      VERSION: "${{ needs.build.outputs.VERSION }}"
+      ELECTOR_IMAGE: "${{ needs.build.outputs.ELECTOR_IMAGE }}"
     steps:
       - uses: navikt/github-app-token-generator@v1
         id: get-token
