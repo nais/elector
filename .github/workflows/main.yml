@@ -15,10 +15,10 @@ jobs:
         id: set-image-tag
         run: |
           version=$(./version.sh)
-          echo "version=${version}" >> $GITHUB_ENV
-          echo "::set-output name=version::${version}"
+          echo "VERSION=${version}" >> $GITHUB_ENV
+          echo "::set-output name=VERSION::${version}"
           echo "ELECTOR_IMAGE=${image_base}:${version}" >> $GITHUB_ENV
-          echo "::set-output name=image::${ELECTOR_IMAGE}"
+          echo "::set-output name=ELECTOR_IMAGE::${ELECTOR_IMAGE}"
       - name: Login to GitHub Packages Docker Registry
         uses: docker/login-action@ab80d026d4753220c4243394c07c7d80f9638d06 # Use commit-sha1 instead of tag for security concerns
         with:
@@ -32,16 +32,16 @@ jobs:
           push: true
           tags: ${{ env.image_base }}:latest,${{ env.ELECTOR_IMAGE }}
     outputs:
-      image: "${{ steps.set-image-tag.outputs.image }}"
-      version: "${{ steps.set-image-tag.outputs.version }}"
+      ELECTOR_IMAGE: "${{ steps.set-image-tag.outputs.ELECTOR_IMAGE }}"
+      VERSION: "${{ steps.set-image-tag.outputs.VERSION }}"
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
     needs:
       - build
     env:
-      VERSION: "${{ needs.setup.outputs.version }}"
-      ELECTOR_IMAGE: "${{ needs.setup.outputs.image }}"
+      VERSION: "${{ needs.setup.outputs.VERSION }}"
+      ELECTOR_IMAGE: "${{ needs.setup.outputs.ELECTOR_IMAGE }}"
     steps:
       - uses: navikt/github-app-token-generator@v1
         id: get-token
@@ -63,8 +63,8 @@ jobs:
           cd nais-yaml
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-          sed -E -i "s#elector_image:.+#elector_image: ${{ env.ELECTOR_IMAGE }}#" vars/global.yaml
+          sed -E -i "s#elector_image:.+#elector_image: ${ELECTOR_IMAGE}#" vars/global.yaml
           git add .
           git --no-pager diff --cached
-          git commit -a -m "Bump Elector image version ${{ env.VERSION }}"
+          git commit -a -m "Bump Elector image version ${VERSION}"
           git push
