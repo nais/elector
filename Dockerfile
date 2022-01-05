@@ -28,4 +28,4 @@ FROM alpine:3
 WORKDIR /
 COPY --from=builder /workspace/elector /elector
 
-CMD ["/elector"]
+ENTRYPOINT ["/elector"]
