@@ -18,7 +18,7 @@ jobs:
           echo "VERSION=${version}" >> $GITHUB_ENV
           echo "::set-output name=VERSION::${version}"
           echo "ELECTOR_IMAGE=${image_base}:${version}" >> $GITHUB_ENV
-          echo "::set-output name=ELECTOR_IMAGE::${ELECTOR_IMAGE}"
+          echo "::set-output name=ELECTOR_IMAGE::${image_base}:${version}"
       - name: Login to GitHub Packages Docker Registry
         uses: docker/login-action@ab80d026d4753220c4243394c07c7d80f9638d06 # Use commit-sha1 instead of tag for security concerns
         with:
@@ -32,8 +32,8 @@ jobs:
           push: true
           tags: ${{ env.image_base }}:latest,${{ env.ELECTOR_IMAGE }}
     outputs:
-      ELECTOR_IMAGE: "${{ steps.set-image-tag.outputs.ELECTOR_IMAGE }}"
       VERSION: "${{ steps.set-image-tag.outputs.VERSION }}"
+      ELECTOR_IMAGE: "${{ steps.set-image-tag.outputs.ELECTOR_IMAGE }}"
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
