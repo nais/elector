@@ -59,9 +59,9 @@ func init() {
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 
-	flag.String(MetricsAddress, "0.0.0.0:9090", "The address the metric endpoint binds to.")
-	flag.String(ProbeAddress, "0.0.0.0:8080", "The address the probe endpoints binds to.")
-	flag.String(ElectionAddress, "0.0.0.0:6060", "The address the election endpoints binds to.")
+	flag.String(MetricsAddress, "0.0.0.0:29090", "The address the metric endpoint binds to.")
+	flag.String(ProbeAddress, "0.0.0.0:28080", "The address the probe endpoints binds to.")
+	flag.String(ElectionAddress, "0.0.0.0:27070", "The address the election endpoints binds to.")
 	flag.String(ElectionName, "", "The election name to take part in.")
 	flag.String(ElectionNamespace, "", "The namespace the election is run in.")
 	flag.String(LogFormat, "text", "Log format, either \"text\" or \"json\"")
