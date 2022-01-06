@@ -135,6 +135,7 @@ func main() {
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
+		Namespace:              electionName.Namespace,
 		MetricsBindAddress:     viper.GetString(MetricsAddress),
 		HealthProbeBindAddress: viper.GetString(ProbeAddress),
 		Logger:                 &logging.Logrus2Logr{Logger: logger},
