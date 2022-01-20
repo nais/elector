@@ -77,6 +77,7 @@ func (c *Candidate) Reconcile(ctx context.Context, request reconcile.Request) (r
 		}
 	}
 
+	c.Logger.Infof("Checking reconcile request: %v", request.NamespacedName)
 	if request.NamespacedName != c.ElectionName {
 		return ctrl.Result{}, nil
 	}
@@ -112,7 +113,7 @@ func (c *Candidate) checkLease(ctx context.Context) (ctrl.Result, error) {
 	var err error
 	var lease *coordination_v1.Lease
 
-	c.Logger.Debugf("Checking Lease %v", c.ElectionName)
+	c.Logger.Infof("Checking Lease %v", c.ElectionName)
 	if lease, err = c.getLease(ctx); err != nil {
 		return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, err
 	}
@@ -185,6 +186,7 @@ func (c *Candidate) setup(ctx context.Context) error {
 	c.setupLock.Lock()
 	defer c.setupLock.Unlock()
 
+	c.Logger.Info("Starting candidate setup")
 	hostname, err := os.Hostname()
 	if err != nil {
 		return fmt.Errorf("unable to get hostname: %w", err)
@@ -208,5 +210,7 @@ func (c *Candidate) setup(ctx context.Context) error {
 		Name:       pod.Name,
 		UID:        pod.UID,
 	}
+	c.Logger.Info("Candidate setup complete")
+
 	return nil
 }

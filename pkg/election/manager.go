@@ -22,7 +22,7 @@ type result struct {
 	LastUpdate string `json:"last_update,omitempty"`
 }
 
-func AddOfficialToManager(mgr manager.Manager, logger *logrus.Logger, electionResults <-chan string, electionAddress string) error {
+func AddOfficialToManager(mgr manager.Manager, logger logrus.FieldLogger, electionResults <-chan string, electionAddress string) error {
 	official := Official{
 		Logger:          logger,
 		ElectionResults: electionResults,

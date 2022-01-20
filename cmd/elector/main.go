@@ -106,22 +106,7 @@ func formatter(logFormat string) (log.Formatter, error) {
 }
 
 func main() {
-	logger := log.New()
-	logfmt, err := formatter(viper.GetString(LogFormat))
-	if err != nil {
-		logger.Error(fmt.Errorf("unable to configure log formatter: %w", err))
-		os.Exit(ExitConfig)
-	}
-
-	logger.SetFormatter(logfmt)
-	level, err := log.ParseLevel(viper.GetString(LogLevel))
-	if err != nil {
-		logger.Error(fmt.Errorf("unable to parse loglevel: %w", err))
-		os.Exit(ExitConfig)
-	}
-	logger.SetLevel(level)
-
-	logger.Infof("Logging configured")
+	logger := configureLogging()
 
 	electionName := types.NamespacedName{
 		Namespace: viper.GetString(ElectionNamespace),
@@ -132,6 +117,10 @@ func main() {
 		logger.Error(fmt.Errorf("both --election and --election-namespace are required options (sic)"))
 		os.Exit(ExitConfig)
 	}
+
+	logger = logger.WithFields(log.Fields{
+		"election_name": electionName.String(),
+	})
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
@@ -150,7 +139,7 @@ func main() {
 		os.Exit(ExitManagerHealth)
 	}
 
-	logger.Info("elector running")
+	logger.Info("elector starting")
 	terminator := context.Background()
 	electionResults := make(chan string)
 
@@ -179,12 +168,33 @@ func main() {
 		}
 	}()
 
+	logger.Infof("starting manager")
 	if err := mgr.Start(terminator); err != nil {
 		logger.Error(fmt.Errorf("manager stopped unexpectedly: %s", err))
 		os.Exit(ExitRuntime)
 	}
 
 	logger.Error(fmt.Errorf("manager has stopped"))
+}
+
+func configureLogging() log.FieldLogger {
+	logger := log.New()
+	logfmt, err := formatter(viper.GetString(LogFormat))
+	if err != nil {
+		logger.Error(fmt.Errorf("unable to configure log formatter: %w", err))
+		os.Exit(ExitConfig)
+	}
+
+	logger.SetFormatter(logfmt)
+	level, err := log.ParseLevel(viper.GetString(LogLevel))
+	if err != nil {
+		logger.Error(fmt.Errorf("unable to parse loglevel: %w", err))
+		os.Exit(ExitConfig)
+	}
+	logger.SetLevel(level)
+
+	logger.Infof("Logging configured")
+	return logger
 }
 
 func init() {
