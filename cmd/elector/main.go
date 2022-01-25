@@ -54,7 +54,7 @@ const (
 func init() {
 
 	// Automatically read configuration options from environment variables.
-	// i.e. --metrics-address will be configurable using ELECTOR_AIVEN_TOKEN.
+	// i.e. --metrics-address will be configurable using ELECTOR_METRICS_ADDRESS.
 	viper.SetEnvPrefix("elector")
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
@@ -127,7 +127,7 @@ func main() {
 		Namespace:              electionName.Namespace,
 		MetricsBindAddress:     viper.GetString(MetricsAddress),
 		HealthProbeBindAddress: viper.GetString(ProbeAddress),
-		Logger:                 &logging.Logrus2Logr{Logger: logger},
+		Logger:                 &logging.Logrus2Logr{Logger: logger.WithField(logging.FieldComponent, "Controller")},
 	})
 	if err != nil {
 		logger.Error(fmt.Errorf("failed to start controller-runtime manager: %w", err))

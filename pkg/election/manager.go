@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/nais/elector/pkg/logging"
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -24,7 +25,7 @@ type result struct {
 
 func AddOfficialToManager(mgr manager.Manager, logger logrus.FieldLogger, electionResults <-chan string, electionAddress string) error {
 	official := Official{
-		Logger:          logger,
+		Logger:          logger.WithField(logging.FieldComponent, "Manager"),
 		ElectionResults: electionResults,
 		ElectionAddress: electionAddress,
 	}

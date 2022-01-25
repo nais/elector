@@ -3,6 +3,7 @@ package election
 import (
 	"context"
 	"fmt"
+	"github.com/nais/elector/pkg/logging"
 	"github.com/nais/elector/pkg/metrics"
 	"github.com/sirupsen/logrus"
 	coordination_v1 "k8s.io/api/coordination/v1"
@@ -37,7 +38,7 @@ func AddCandidateToManager(mgr ctrl.Manager, logger logrus.FieldLogger, election
 	candidate := Candidate{
 		Client:          mgr.GetClient(),
 		Clock:           &clock.RealClock{},
-		Logger:          logger,
+		Logger:          logger.WithField(logging.FieldComponent, "Candidate"),
 		ElectionResults: electionResults,
 		ElectionName:    electionName,
 	}
@@ -121,6 +122,8 @@ func (c *Candidate) checkLease(ctx context.Context) (ctrl.Result, error) {
 		c.Logger.Infof("No existing Lease, running campaign for %v", c.ElectionName)
 		lease, err = c.runCampaign(ctx)
 		if err != nil {
+			err = fmt.Errorf("error during campaign: %w", err)
+			c.Logger.Error(err)
 			return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, err
 		}
 	}
@@ -178,6 +181,7 @@ func (c *Candidate) runCampaign(ctx context.Context) (*coordination_v1.Lease, er
 
 func (c *Candidate) updateElection(lease *coordination_v1.Lease) {
 	if lease != nil {
+		c.Logger.Debugf("Sending election results, leader is: %v", *lease.Spec.HolderIdentity)
 		c.ElectionResults <- *lease.Spec.HolderIdentity
 	}
 }
