@@ -3,8 +3,11 @@ package election
 import (
 	"context"
 	"fmt"
-	"github.com/nais/elector/pkg/logging"
-	"github.com/nais/elector/pkg/metrics"
+	"net/http"
+	"os"
+	"sync"
+	"time"
+
 	"github.com/sirupsen/logrus"
 	coordination_v1 "k8s.io/api/coordination/v1"
 	core_v1 "k8s.io/api/core/v1"
@@ -12,13 +15,12 @@ import (
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/clock"
-	"net/http"
-	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sync"
-	"time"
+
+	"github.com/nais/elector/pkg/logging"
+	"github.com/nais/elector/pkg/metrics"
 )
 
 type Candidate struct {
@@ -78,7 +80,7 @@ func (c *Candidate) Reconcile(ctx context.Context, request reconcile.Request) (r
 		}
 	}
 
-	c.Logger.Infof("Checking reconcile request: %v", request.NamespacedName)
+	c.Logger.Debugf("Checking reconcile request: %v", request.NamespacedName)
 	if request.NamespacedName != c.ElectionName {
 		return ctrl.Result{}, nil
 	}
@@ -114,7 +116,7 @@ func (c *Candidate) checkLease(ctx context.Context) (ctrl.Result, error) {
 	var err error
 	var lease *coordination_v1.Lease
 
-	c.Logger.Infof("Checking Lease %v", c.ElectionName)
+	c.Logger.Debugf("Checking Lease %v", c.ElectionName)
 	if lease, err = c.getLease(ctx); err != nil {
 		return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, err
 	}
