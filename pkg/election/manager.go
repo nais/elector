@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/nais/elector/pkg/logging"
-	"github.com/sirupsen/logrus"
 	"net/http"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"time"
+
+	"github.com/sirupsen/logrus"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	"github.com/nais/elector/pkg/logging"
 )
 
 type Official struct {
@@ -58,6 +60,8 @@ func (o *Official) Start(ctx context.Context) error {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
+		w.Header().Set("Content-Type", "application/json")
 		_, err = w.Write(bytes)
 		if err != nil {
 			o.Logger.Errorf("failed to write response: %v", err)
