@@ -1,70 +1,18 @@
 name: Build and deploy elector
-
-on: [push]
-
-env:
-  image_base: ghcr.io/${{ github.repository }}
-
+on: 
+  - push
 jobs:
-  build:
-    name: Build and push
+  build_push_sign:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - uses: actions/checkout@v2
-      - name: Generate image environment variable
-        id: set-image-tag
-        run: |
-          version=$(./version.sh)
-          echo "VERSION=${version}" >> $GITHUB_ENV
-          echo "VERSION=${version}" >> ${GITHUB_OUTPUT}
-          echo "ELECTOR_IMAGE=${image_base}:${version}" >> $GITHUB_ENV
-          echo "ELECTOR_IMAGE=${image_base}:${version}" >> ${GITHUB_OUTPUT}
-      - name: Login to GitHub Packages Docker Registry
-        uses: docker/login-action@ab80d026d4753220c4243394c07c7d80f9638d06 # Use commit-sha1 instead of tag for security concerns
+      - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # ratchet:actions/checkout@v3
+      - uses: nais/build-push-sign@main
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          push: true
-          tags: ${{ env.image_base }}:latest,${{ env.ELECTOR_IMAGE }}
-    outputs:
-      VERSION: "${{ steps.set-image-tag.outputs.VERSION }}"
-      ELECTOR_IMAGE: "${{ steps.set-image-tag.outputs.ELECTOR_IMAGE }}"
-  deploy:
-    name: Deploy
-    runs-on: ubuntu-latest
-    needs:
-      - build
-    env:
-      VERSION: "${{ needs.build.outputs.VERSION }}"
-      ELECTOR_IMAGE: "${{ needs.build.outputs.ELECTOR_IMAGE }}"
-    steps:
-      - uses: navikt/github-app-token-generator@v1
-        id: get-token
-        if: github.ref == 'refs/heads/main'
-        with:
-          private-key: ${{ secrets.NAIS_APP_PRIVATE_KEY }}
-          app-id: ${{ secrets.NAIS_APP_ID }}
-          repo: navikt/nais-yaml
-      - name: Checkout nais-yaml
-        if: github.ref == 'refs/heads/main'
-        uses: actions/checkout@v2
-        with:
-          repository: navikt/nais-yaml
-          token: ${{ steps.get-token.outputs.token }}
-          path: nais-yaml
-      - name: Update nais-yaml
-        if: github.ref == 'refs/heads/main'
-        run: |
-          cd nais-yaml
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-          sed -E -i "s#elector_image:.+#elector_image: ${ELECTOR_IMAGE}#" vars/global.yaml
-          git add .
-          git --no-pager diff --cached
-          git commit -a -m "Bump Elector image version ${VERSION}"
-          git push
+          name: elector
+          dockerfile: Dockerfile
+          google_service_account: gh-elector
+          push: ${{ github.actor != 'dependabot[bot]' }}
+          workload_identity_provider: ${{ secrets.NAIS_IO_WORKLOAD_IDENTITY_PROVIDER }}
