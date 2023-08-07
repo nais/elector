@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM cgr.dev/chainguard/go:1.20 as builder
+FROM golang:1.20 as builder
 
 ENV os "linux"
 ENV arch "amd64"
@@ -24,7 +24,7 @@ RUN make test
 # Build
 RUN CGO_ENABLED=0 GOOS=${os} GOARCH=${arch} GO111MODULE=on go build -a -installsuffix cgo -o elector cmd/elector/main.go
 
-FROM cgr.dev/chainguard/static
+FROM gcr.io/distroless/static-debian11
 WORKDIR /
 COPY --from=builder /workspace/elector /elector
 
