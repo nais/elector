@@ -12,14 +12,14 @@ jobs:
       RUNNERIMG_IDENTITY: "keyless@distroless.iam.gserviceaccount.com"
       RUNNERIMG_ISSUER: "https://accounts.google.com"
     steps:
-      - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # ratchet:actions/checkout@v3
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # ratchet:actions/checkout@v3
       - name: Install cosign
-        uses: sigstore/cosign-installer@9e9de2292db7abb3f51b7f4808d98f0d347a8919 # ratchet:sigstore/cosign-installer@main
+        uses: sigstore/cosign-installer@38ab09d8bfc57c5240fe014ad3ec50c4904219a1 # ratchet:sigstore/cosign-installer@main
         with:
           cosign-release: 'v2.0.0'
       - name: Verify runner image
         run: cosign verify --certificate-identity ${{ env.RUNNERIMG_IDENTITY }} --certificate-oidc-issuer ${{ env.RUNNERIMG_ISSUER }} ${{ env.RUNNER_IMG }}
-      - uses: nais/build-push-sign@7ec7617aae88394f31653b30c0b20b5706678396 # ratchet:nais/build-push-sign@main
+      - uses: nais/platform-build-push-sign@2a0a82c67a7bda6d954542edf187dde0c868983c # ratchet:nais/platform-build-push-sign@main
         with:
           name: elector
           dockerfile: Dockerfile
