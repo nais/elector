@@ -12,7 +12,7 @@ jobs:
       RUNNERIMG_IDENTITY: "keyless@distroless.iam.gserviceaccount.com"
       RUNNERIMG_ISSUER: "https://accounts.google.com"
     steps:
-      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # ratchet:actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # ratchet:actions/checkout@v3
       - name: Install cosign
         uses: sigstore/cosign-installer@38ab09d8bfc57c5240fe014ad3ec50c4904219a1 # ratchet:sigstore/cosign-installer@main
         with:
