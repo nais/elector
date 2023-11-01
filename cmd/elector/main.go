@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/go-logr/logr"
 	"github.com/nais/elector/pkg/election"
 	"github.com/nais/elector/pkg/logging"
 	"k8s.io/apimachinery/pkg/types"
 	"os"
 	"os/signal"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"strings"
 	"syscall"
 	"time"
@@ -123,11 +126,17 @@ func main() {
 	})
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		Namespace:              electionName.Namespace,
-		MetricsBindAddress:     viper.GetString(MetricsAddress),
+		Scheme: scheme,
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				electionName.Namespace: {},
+			},
+		},
+		Metrics: server.Options{
+			BindAddress: viper.GetString(MetricsAddress),
+		},
 		HealthProbeBindAddress: viper.GetString(ProbeAddress),
-		Logger:                 &logging.Logrus2Logr{Logger: logger.WithField(logging.FieldComponent, "Controller")},
+		Logger:                 logr.New(&logging.Logrus2Logr{Logger: logger.WithField(logging.FieldComponent, "Controller")}),
 	})
 	if err != nil {
 		logger.Error(fmt.Errorf("failed to start controller-runtime manager: %w", err))

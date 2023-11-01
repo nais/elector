@@ -14,7 +14,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -89,7 +89,7 @@ func (c *Candidate) Reconcile(ctx context.Context, request reconcile.Request) (r
 }
 
 func (c *Candidate) Start(ctx context.Context) error {
-	ticker := c.Clock.NewTicker(time.Minute * 1)
+	ticker := c.Clock.NewTimer(time.Minute * 1)
 
 	if c.ownerReference == nil {
 		err := c.setup(ctx)

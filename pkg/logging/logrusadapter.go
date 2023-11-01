@@ -11,11 +11,14 @@ type Logrus2Logr struct {
 	name   string
 }
 
-func (l *Logrus2Logr) Enabled() bool {
+func (l *Logrus2Logr) Init(_ logr.RuntimeInfo) {
+}
+
+func (l *Logrus2Logr) Enabled(_ int) bool {
 	return l.Logger != nil
 }
 
-func (l *Logrus2Logr) Info(msg string, keysAndValues ...interface{}) {
+func (l *Logrus2Logr) Info(_ int, msg string, keysAndValues ...interface{}) {
 	fields := makeFields(keysAndValues)
 	l.Logger.WithFields(fields).Info(msg)
 }
@@ -25,16 +28,12 @@ func (l *Logrus2Logr) Error(err error, msg string, keysAndValues ...interface{})
 	l.Logger.WithFields(fields).Error(fmt.Errorf("%s: %w", msg, err))
 }
 
-func (l *Logrus2Logr) V(_ int) logr.Logger {
-	return l
-}
-
-func (l *Logrus2Logr) WithValues(keysAndValues ...interface{}) logr.Logger {
+func (l *Logrus2Logr) WithValues(keysAndValues ...interface{}) logr.LogSink {
 	fields := makeFields(keysAndValues)
 	return &Logrus2Logr{Logger: l.Logger.WithFields(fields)}
 }
 
-func (l *Logrus2Logr) WithName(name string) logr.Logger {
+func (l *Logrus2Logr) WithName(name string) logr.LogSink {
 	if l.name != "" {
 		name = fmt.Sprintf("%s.%s", l.name, name)
 	}

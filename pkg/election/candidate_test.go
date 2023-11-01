@@ -4,17 +4,18 @@ package election
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	coordination_v1 "k8s.io/api/coordination/v1"
 	core_v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8s_runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/clock"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	testclock "k8s.io/utils/clock/testing"
 	"k8s.io/utils/pointer"
 	"os"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"testing"
 	"time"
 )
@@ -41,7 +43,7 @@ type testRig struct {
 	hostname        string
 	candidate       Candidate
 	electionResults chan string
-	fakeClock       clock.FakeClock
+	fakeClock       testclock.FakeClock
 }
 
 func testBinDirectory() string {
@@ -75,16 +77,21 @@ func newTestRig(t *testing.T) (*testRig, error) {
 		return nil, fmt.Errorf("setup Kubernetes test environment: %w", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	t.Cleanup(func() {
 		t.Log("Stopping Kubernetes")
+		cancel()
 		if err := rig.kubernetes.Stop(); err != nil {
 			t.Errorf("failed to stop kubernetes test rig: %s", err)
 		}
 	})
 
 	rig.manager, err = ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:             rig.kubernetes.Scheme,
-		MetricsBindAddress: "0",
+		Scheme: rig.kubernetes.Scheme,
+		Metrics: server.Options{
+			BindAddress: "0",
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize manager: %w", err)
@@ -92,7 +99,7 @@ func newTestRig(t *testing.T) (*testRig, error) {
 
 	go func() {
 		cache := rig.manager.GetCache()
-		err := cache.Start(context.Background())
+		err := cache.Start(ctx)
 		if err != nil {
 			t.Errorf("unable to start informer cache: %v", err)
 		}
@@ -108,7 +115,7 @@ func newTestRig(t *testing.T) (*testRig, error) {
 
 	rig.electionResults = make(chan string)
 
-	rig.fakeClock = clock.FakeClock{}
+	rig.fakeClock = testclock.FakeClock{}
 	rig.candidate = Candidate{
 		Client:          rig.client,
 		Clock:           &rig.fakeClock,
@@ -123,20 +130,20 @@ func newTestRig(t *testing.T) (*testRig, error) {
 	return rig, nil
 }
 
-func (rig testRig) assertExists(ctx context.Context, resource client.Object, objectKey client.ObjectKey) {
+func (rig *testRig) assertExists(ctx context.Context, resource client.Object, objectKey client.ObjectKey) {
 	rig.t.Helper()
 	err := rig.client.Get(ctx, objectKey, resource)
 	assert.NoError(rig.t, err)
 	assert.NotNil(rig.t, resource)
 }
 
-func (rig testRig) assertNotExists(ctx context.Context, resource client.Object, objectKey client.ObjectKey) {
+func (rig *testRig) assertNotExists(ctx context.Context, resource client.Object, objectKey client.ObjectKey) {
 	rig.t.Helper()
 	err := rig.client.Get(ctx, objectKey, resource)
-	assert.True(rig.t, errors.IsNotFound(err), "the resource found in the cluster should not be there")
+	assert.True(rig.t, k8s_errors.IsNotFound(err), "the resource found in the cluster should not be there")
 }
 
-func (rig testRig) createForTest(ctx context.Context, obj client.Object) {
+func (rig *testRig) createForTest(ctx context.Context, obj client.Object) {
 	kind := obj.DeepCopyObject().GetObjectKind()
 	rig.t.Logf("Creating %s", describe(obj))
 	if err := rig.client.Create(ctx, obj); err != nil {
@@ -261,7 +268,7 @@ func run(t *testing.T, rig *testRig, ctx context.Context) {
 	go func() {
 		err := rig.candidate.Start(ctx)
 		switch {
-		case err == context.Canceled:
+		case errors.Is(err, context.Canceled):
 			return
 		case err != nil:
 			t.Errorf("candidate errored out: %v", err)
