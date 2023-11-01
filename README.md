@@ -21,3 +21,17 @@ When running, elector can be queried on the election port to get the name of the
 Default election port is 6060 (override with `--http`).
 Metrics are available on port 9090 (override with `--metrics-address`).
 Probes are available on port 8080 (override with `--probe-address`).
+
+
+Development
+-----------
+
+The integration tests uses envtest to simulate a kubernetes cluster.
+Using the `integration_test` target in make will configure envtest for you before running the tests.
+
+If you would rather control the setup of envtest yourself, use the setup-envtest command to install and configure envtest.
+
+```bash
+go run sigs.k8s.io/controller-runtime/tools/setup-envtest list  # Get list of supported versions
+source <(go run sigs.k8s.io/controller-runtime/tools/setup-envtest use -p env ${SUPPORTED_K8S_VERSION})  # Activate selected version in current shell
+```

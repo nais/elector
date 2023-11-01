@@ -18,8 +18,6 @@ import (
 	testclock "k8s.io/utils/clock/testing"
 	"k8s.io/utils/pointer"
 	"os"
-	"path/filepath"
-	"runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -46,20 +44,10 @@ type testRig struct {
 	fakeClock       testclock.FakeClock
 }
 
-func testBinDirectory() string {
-	_, filename, _, _ := runtime.Caller(0)
-	return filepath.Clean(filepath.Join(filepath.Dir(filename), "../../.testbin/"))
-}
-
 func newTestRig(t *testing.T) (*testRig, error) {
-	err := os.Setenv("KUBEBUILDER_ASSETS", testBinDirectory())
-	if err != nil {
-		return nil, fmt.Errorf("failed to set environment variable: %w", err)
-	}
-
 	scheme := k8s_runtime.NewScheme()
 
-	err = clientgoscheme.AddToScheme(scheme)
+	err := clientgoscheme.AddToScheme(scheme)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add client schemes: %w", err)
 	}
