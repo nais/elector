@@ -9,6 +9,9 @@ on:
     paths-ignore:
       - '*.md'
 
+env:
+  GOOGLE_REGISTRY: "europe-north1-docker.pkg.dev"
+
 jobs:
   build:
     runs-on: ubuntu-latest
