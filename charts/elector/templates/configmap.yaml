@@ -4,5 +4,7 @@ metadata:
   name: {{ include "elector.fullname" . }}
   labels:
     {{- include "elector.labels" . | nindent 4 }}
+  annotations:
+    reloader.stakater.com/match: "true"
 data:
   elector_image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
