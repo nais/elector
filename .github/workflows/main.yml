@@ -20,9 +20,76 @@ jobs:
       - name: Verify runner image
         run: cosign verify --certificate-identity ${{ env.RUNNERIMG_IDENTITY }} --certificate-oidc-issuer ${{ env.RUNNERIMG_ISSUER }} ${{ env.RUNNER_IMG }}
       - uses: nais/platform-build-push-sign@2a0a82c67a7bda6d954542edf187dde0c868983c # ratchet:nais/platform-build-push-sign@main
+        id: build-push-sign
         with:
           name: elector
           dockerfile: Dockerfile
           google_service_account: gh-elector
           push: ${{ github.actor != 'dependabot[bot]' }}
           workload_identity_provider: ${{ secrets.NAIS_IO_WORKLOAD_IDENTITY_PROVIDER }}
+          cache_from: type=gha
+          cache_to: type=gha,mode=max
+    outputs:
+      version: "${{ steps.build-push-sign.outputs.version }}"
+
+  chart:
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    name: Build and push chart
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    steps:
+      - uses: actions/checkout@v4 # ratchet:actions/checkout@v3
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        if: github.ref == 'refs/heads/main'
+        uses: 'google-github-actions/auth@35b0e87d162680511bf346c299f71c9c5c379033' # ratchet:google-github-actions/auth@v1.1.1
+        with:
+          workload_identity_provider: ${{ secrets.NAIS_IO_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: 'gh-elector@nais-io.iam.gserviceaccount.com'
+          token_format: 'access_token'
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@e30db14379863a8c79331b04a9969f4c1e225e0b' # ratchet:google-github-actions/setup-gcloud@v1
+      - name: 'Log in to Google Artifact Registry'
+        if: github.ref == 'refs/heads/main'
+        run: |-
+          echo '${{ steps.auth.outputs.access_token }}' | docker login -u oauth2accesstoken --password-stdin https://${{ env.GOOGLE_REGISTRY }}
+      - uses: azure/setup-helm@5119fcb9089d432beecbf79bb2c7915207344b78 # ratchet:azure/setup-helm@v3
+        name: 'Setup Helm'
+        with:
+          version: '3.8.0'
+      - name: Set versions
+        run: |-
+          for chart in charts/*; do
+            yq e '.version = "${{ needs.build.outputs.version }}"' --inplace "${chart}/Chart.yaml"
+            yq e '.image.tag = "${{ needs.build.outputs.version }}"' --inplace "${chart}/values.yaml"
+          done
+      - name: Build Chart
+        run: |-
+          for chart in charts/*; do
+            helm package "$chart"
+          done
+      - name: Push Chart
+        if: github.ref == 'refs/heads/main'
+        run: |-
+          for chart in *.tgz; do
+            helm push "$chart" oci://${{ env.GOOGLE_REGISTRY }}/nais-io/nais/feature
+          done
+
+  rollout:
+    name: Rollout
+    if: github.actor != 'dependabot[bot]' && github.ref == 'refs/heads/main'
+    needs:
+      - build
+      - chart
+    runs-on: fasit-deploy
+    permissions:
+      id-token: write
+    steps:
+      - uses: nais/fasit-deploy@badff0705af8a57bcf0ab172895273da09ae5959 # ratchet:nais/fasit-deploy@v2
+        with:
+          chart: oci://${{ env.GOOGLE_REGISTRY }}/nais-io/nais/feature/elector
+          version: ${{ needs.build.outputs.version }}
+          feature_name: elector

@@ -1,0 +1,8 @@
+# Default values for elector.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+image:
+  repository: europe-north1-docker.pkg.dev/nais-io/nais/images/elector
+  pullPolicy: IfNotPresent
+  tag: latest

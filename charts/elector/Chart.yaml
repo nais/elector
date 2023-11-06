@@ -1,0 +1,7 @@
+apiVersion: v2
+name: elector
+description: Providing elector configuration for naiserator
+type: application
+version: invalid
+sources:
+  - https://github.com/nais/elector/tree/main/charts
