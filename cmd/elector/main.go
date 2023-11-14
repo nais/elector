@@ -16,6 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nais/liberator/pkg/logrus2logr"
+
 	electormetrics "github.com/nais/elector/pkg/metrics"
 	log "github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
@@ -136,7 +138,7 @@ func main() {
 			BindAddress: viper.GetString(MetricsAddress),
 		},
 		HealthProbeBindAddress: viper.GetString(ProbeAddress),
-		Logger:                 logr.New(&logging.Logrus2Logr{Logger: logger.WithField(logging.FieldComponent, "Controller")}),
+		Logger:                 logr.New(&logrus2logr.Logrus2Logr{Logger: logger.WithField(logging.FieldComponent, "Controller")}),
 	})
 	if err != nil {
 		logger.Error(fmt.Errorf("failed to start controller-runtime manager: %w", err))
