@@ -38,6 +38,7 @@ jobs:
           google_service_account: gh-elector
           push: ${{ github.actor != 'dependabot[bot]' }}
           workload_identity_provider: ${{ secrets.NAIS_IO_WORKLOAD_IDENTITY_PROVIDER }}
+          multi-platform: true
           cache_from: type=gha
           cache_to: type=gha,mode=max
     outputs:
