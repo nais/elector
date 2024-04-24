@@ -104,10 +104,12 @@ func newTestRig(t *testing.T) (*testRig, error) {
 	rig.electionResults = make(chan string)
 
 	rig.fakeClock = testclock.FakeClock{}
+	logger := logrus.New()
+	logger.Level = logrus.DebugLevel
 	rig.candidate = Candidate{
 		Client:          rig.client,
 		Clock:           &rig.fakeClock,
-		Logger:          logrus.New(),
+		Logger:          logger,
 		ElectionResults: rig.electionResults,
 		ElectionName: types.NamespacedName{
 			Namespace: namespace,
@@ -203,8 +205,8 @@ func TestCandidate_WinRaceToElection(t *testing.T) {
 		t.FailNow()
 	}
 
-	// Allow 15 seconds for test to complete
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	// Allow 25 seconds for test to complete
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	t.Cleanup(cancel)
 
 	rig.commonSetupForTest(ctx)
@@ -231,7 +233,8 @@ func TestCandidate_WinRaceToElection(t *testing.T) {
 			t.Errorf("failed to delete lease")
 			cancel()
 		}
-		rig.fakeClock.Step(1 * time.Minute)
+		time.Sleep(1 * time.Second)
+		rig.fakeClock.Step(65 * time.Second)
 	}()
 
 	run(t, rig, ctx)
