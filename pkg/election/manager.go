@@ -62,6 +62,7 @@ func (o *Official) Start(ctx context.Context) error {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-cache")
 		_, err = w.Write(bytes)
 		if err != nil {
 			o.Logger.Errorf("failed to write response: %v", err)
