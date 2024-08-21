@@ -103,6 +103,10 @@ func (o *official) Start(ctx context.Context) error {
 		cancel()
 	}()
 
+	return o.run(ctx)
+}
+
+func (o *official) run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
