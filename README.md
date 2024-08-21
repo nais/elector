@@ -16,7 +16,30 @@ Users should make sure to have alerts to detect when a leader is stuck.
 API
 ---
 
-When running, elector can be queried on the election port to get the name of the current leader.
+Elector has two API endpoints on the election port for getting information about the currently elected leader.
+The endpoints return the same information, but one is a simple JSON object and the other is a [Server Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events) stream.
+
+The object returned looks like this:
+
+```json
+{
+    "name": "pod-name",
+    "last_update": "timestamp of last update" 
+}
+```
+
+### Original API: `/`
+
+Simple GET with immediate return of the described object.
+    
+
+### SSE API: `/sse`
+
+The SSE API is a stream of server sent events that will send a message whenever there is an update.
+Each event will be a JSON object as described above.
+
+
+### Ports
 
 Default election port is 6060 (override with `--http`).
 Metrics are available on port 9090 (override with `--metrics-address`).
@@ -26,8 +49,8 @@ Probes are available on port 8080 (override with `--probe-address`).
 Development
 -----------
 
-The integration tests uses envtest to simulate a kubernetes cluster.
-Using the `integration_test` target in make will configure envtest for you before running the tests.
+Some of the tests uses envtest to simulate a kubernetes cluster.
+Using the `test` target in make will configure envtest for you before running the tests.
 
 If you would rather control the setup of envtest yourself, use the setup-envtest command to install and configure envtest.
 
