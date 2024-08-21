@@ -1,6 +1,6 @@
 //go:build integration
 
-package election
+package candidate
 
 import (
 	"context"
