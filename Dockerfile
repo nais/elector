@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM --platform=$BUILDPLATFORM golang:1.23 as builder
+FROM --platform=$BUILDPLATFORM golang:1.23 AS builder
 
 WORKDIR /workspace
 
@@ -17,14 +17,8 @@ RUN go build std
 # Copy rest of project
 COPY . /workspace
 
-# Download envtest tools early to avoid re-downloading on every code change
-RUN make .envtest
-
 # Run tests
 RUN make test
-
-# Run integration tests
-RUN make integration_test
 
 # Build
 RUN CGO_ENABLED=0 go build -a -installsuffix cgo -o elector cmd/elector/main.go

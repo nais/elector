@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-logr/logr"
-	"github.com/nais/elector/pkg/election"
+	"github.com/nais/elector/pkg/election/candidate"
+	"github.com/nais/elector/pkg/election/official"
 	"github.com/nais/elector/pkg/logging"
 	"k8s.io/apimachinery/pkg/types"
 	"os"
@@ -154,13 +155,13 @@ func main() {
 	terminator := context.Background()
 	electionResults := make(chan string)
 
-	err = election.AddCandidateToManager(mgr, logger, electionResults, electionName)
+	err = candidate.AddCandidateToManager(mgr, logger, electionResults, electionName)
 	if err != nil {
 		logger.Error(err)
 		os.Exit(ExitCandidateAdded)
 	}
 
-	err = election.AddOfficialToManager(mgr, logger, electionResults, viper.GetString(ElectionAddress))
+	err = official.AddOfficialToManager(mgr, logger, electionResults, viper.GetString(ElectionAddress))
 	if err != nil {
 		logger.Error(fmt.Errorf("failed to add election official to controller-runtime manager: %w", err))
 		os.Exit(ExitOfficialAdded)
