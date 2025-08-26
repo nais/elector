@@ -8,7 +8,7 @@ require (
 	github.com/benjamintf1/unmarshalledmatchers v1.0.0
 	github.com/go-logr/logr v1.4.3
 	github.com/nais/liberator v0.0.0-20231114130128-a3a9edbe0da1
-	github.com/onsi/ginkgo/v2 v2.25.0
+	github.com/onsi/ginkgo/v2 v2.25.1
 	github.com/onsi/gomega v1.38.0
 	github.com/prometheus/client_golang v1.23.0
 	github.com/sirupsen/logrus v1.9.3
