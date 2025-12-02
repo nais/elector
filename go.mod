@@ -1,6 +1,6 @@
 module github.com/nais/elector
 
-go 1.25.3
+go 1.25.5
 
 require (
 	github.com/benjamintf1/unmarshalledmatchers v1.0.0
