@@ -13,9 +13,9 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
-	k8s.io/api v0.35.0
+	k8s.io/api v0.35.1
 	k8s.io/apimachinery v0.36.0-alpha.1
-	k8s.io/client-go v0.35.0
+	k8s.io/client-go v0.35.1
 	k8s.io/utils v0.0.0-20260108192941-914a6e750570
 	sigs.k8s.io/controller-runtime v0.23.1
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20260216173200-e4c1c38bcbdb
