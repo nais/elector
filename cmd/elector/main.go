@@ -3,19 +3,20 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
 	"github.com/go-logr/logr"
 	"github.com/nais/elector/pkg/election/candidate"
 	"github.com/nais/elector/pkg/election/official"
 	"github.com/nais/elector/pkg/logging"
 	"k8s.io/apimachinery/pkg/types"
-	"os"
-	"os/signal"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"strings"
-	"syscall"
-	"time"
 
 	"github.com/nais/liberator/pkg/logrus2logr"
 
@@ -128,6 +129,8 @@ func main() {
 		"election_name": electionName.String(),
 	})
 
+	ctrl.SetLogger(logr.New(&logrus2logr.Logrus2Logr{Logger: logger.WithField(logging.FieldComponent, "controller-runtime")}))
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Cache: cache.Options{
@@ -141,6 +144,7 @@ func main() {
 		HealthProbeBindAddress: viper.GetString(ProbeAddress),
 		Logger:                 logr.New(&logrus2logr.Logrus2Logr{Logger: logger.WithField(logging.FieldComponent, "Controller")}),
 	})
+
 	if err != nil {
 		logger.Error(fmt.Errorf("failed to start controller-runtime manager: %w", err))
 		os.Exit(ExitManagerCreation)
