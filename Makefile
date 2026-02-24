@@ -1,4 +1,4 @@
-K8S_VERSION := 1.29
+K8S_VERSION := 1.33
 SHELL := /bin/bash
 
 elector:
