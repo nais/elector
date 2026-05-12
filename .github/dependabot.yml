@@ -4,6 +4,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      time: "09:00"
+      day: "monday"
     open-pull-requests-limit: 5
     groups:
       k8s:
@@ -15,9 +17,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      time: "09:00"
+      day: "monday"
     open-pull-requests-limit: 5
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+      time: "09:00"
+      day: "monday"
     open-pull-requests-limit: 5
