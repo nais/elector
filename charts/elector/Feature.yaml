@@ -4,7 +4,6 @@ dependencies:
 environmentKinds:
   - tenant
   - onprem
-  - legacy
 values:
   image.tag:
     displayName: Image tag
