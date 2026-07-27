@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/benjamintf1/unmarshalledmatchers v1.0.0
-	github.com/go-logr/logr v1.4.3
+	github.com/go-logr/logr v1.4.4
 	github.com/nais/liberator v0.0.0-20231114130128-a3a9edbe0da1
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
