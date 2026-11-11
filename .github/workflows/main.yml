@@ -9,103 +9,23 @@ on:
     paths-ignore:
       - '*.md'
 
-env:
-  GOOGLE_REGISTRY: "europe-north1-docker.pkg.dev"
+permissions:
+  contents: write
+  id-token: write
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    env:
-      RUNNER_IMG: "gcr.io/distroless/static-debian11"
-      RUNNERIMG_IDENTITY: "keyless@distroless.iam.gserviceaccount.com"
-      RUNNERIMG_ISSUER: "https://accounts.google.com"
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # ratchet:actions/checkout@v3
-      - name: Install cosign
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # ratchet:sigstore/cosign-installer@v3.9.1
-      - name: Verify runner image
-        run: cosign verify --certificate-identity ${{ env.RUNNERIMG_IDENTITY }} --certificate-oidc-issuer ${{ env.RUNNERIMG_ISSUER }} ${{ env.RUNNER_IMG }}
-      - uses: nais/platform-build-push-sign@main # ratchet:exclude
-        id: build-push-sign
-        with:
-          name: elector
-          dockerfile: Dockerfile
-          google_service_account: gh-elector
-          push: ${{ github.actor != 'dependabot[bot]' }}
-          workload_identity_provider: ${{ secrets.NAIS_IO_WORKLOAD_IDENTITY_PROVIDER }}
-          multi-platform: true
-          cache_from: type=gha
-          cache_to: type=gha,mode=max
-    outputs:
-      version: "${{ steps.build-push-sign.outputs.version }}"
-
-  chart:
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-    name: Build and push chart
-    runs-on: ubuntu-latest
-    needs:
-      - build
-    steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # ratchet:actions/checkout@v4
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        if: github.ref == 'refs/heads/main'
-        uses: 'google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093' # ratchet:google-github-actions/auth@v3.0.0
-        with:
-          workload_identity_provider: ${{ secrets.NAIS_IO_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: 'gh-elector@nais-io.iam.gserviceaccount.com'
-          token_format: 'access_token'
-      - name: 'Set up Cloud SDK'
-        uses: 'google-github-actions/setup-gcloud@cb1e50a9932213ecece00a606661ae9ca44f3397' # ratchet:google-github-actions/setup-gcloud@v1
-      - name: 'Log in to Google Artifact Registry'
-        if: github.ref == 'refs/heads/main'
-        run: |-
-          echo '${{ steps.auth.outputs.access_token }}' | docker login -u oauth2accesstoken --password-stdin https://${{ env.GOOGLE_REGISTRY }}
-      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # ratchet:azure/setup-helm@v3
-        name: 'Setup Helm'
-        with:
-          version: '3.8.0'
-      - name: Set versions
-        run: |-
-          for chart in charts/*; do
-            yq e '.version = "${{ needs.build.outputs.version }}"' --inplace "${chart}/Chart.yaml"
-            yq e '.image.tag = "${{ needs.build.outputs.version }}"' --inplace "${chart}/values.yaml"
-          done
-      - name: Build Chart
-        run: |-
-          for chart in charts/*; do
-            helm package "$chart"
-          done
-      - name: Push Chart
-        if: github.ref == 'refs/heads/main'
-        run: |-
-          for chart in *.tgz; do
-            helm push "$chart" oci://${{ env.GOOGLE_REGISTRY }}/nais-io/nais/feature
-          done
-
-  deploy:
-    name: Deploy
-    if: github.actor != 'dependabot[bot]' && github.ref == 'refs/heads/main'
-    needs:
-      - build
-      - chart
-    runs-on: fasit-deploy
-    permissions:
-      id-token: write
-    steps:
-      - uses: nais/fasit-deploy@v4 # ratchet:exclude
-        with:
-          chart: oci://${{ env.GOOGLE_REGISTRY }}/nais-io/nais/feature/elector
-          version: ${{ needs.build.outputs.version }}
-          targets: |
-            [
-              { "target": { "kind": "tenant", "tenant": "ci-nais" }, "wait": true },
-              { "target": { "kind": "onprem", "tenant": "ci-nais" }, "wait": true },
-              { "target": { "kind": "tenant" } },
-              { "target": { "kind": "onprem" } }
-            ]
+  build-deploy:
+    uses: nais/actions/.github/workflows/mise-build-deploy-fasit.yaml@fba6b04257cea335bdb7b516411820fcae03b727 # ratchet:nais/actions/.github/workflows/mise-build-deploy-fasit.yaml@main
+    with:
+      builds-chart: true
+      deploys-to-fasit: true
+      targets: |
+        [
+          { "target": { "kind": "tenant", "tenant": "ci-nais" }, "wait": true },
+          { "target": { "kind": "onprem", "tenant": "ci-nais" }, "wait": true },
+          { "target": { "kind": "tenant" } },
+          { "target": { "kind": "onprem" } }
+        ]
+      mise-tasks: '["test:envtest", "check"]'
+    secrets:
+      NAIS_IO_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.NAIS_IO_WORKLOAD_IDENTITY_PROVIDER }}

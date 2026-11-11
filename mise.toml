@@ -54,12 +54,12 @@ run = "go tool mvdan.cc/gofumpt -w ./"
 description = "Fix runs the Go fix tool (cmd/fix) on the named packages and applies suggested fixes."
 run = "go fix ./..."
 
-[tasks."envtest"]
+[tasks."setup:envtest"]
 description = "Download envtest binaries and write env to .envtest"
 run = "go run sigs.k8s.io/controller-runtime/tools/setup-envtest use -p env $K8S_VERSION > .envtest"
 
 [tasks."test:envtest"]
 description = "Run envtest-based tests with ginkgo"
-depends = "envtest"
+depends = "setup:envtest"
 run = "go run github.com/onsi/ginkgo/v2/ginkgo run pkg/..."
 env._.file = ".envtest"

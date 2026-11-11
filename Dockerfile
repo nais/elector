@@ -17,9 +17,6 @@ RUN go build std
 # Copy rest of project
 COPY . /workspace
 
-# Run tests
-RUN make test
-
 # Build
 RUN CGO_ENABLED=0 go build -o elector cmd/elector/main.go
 
