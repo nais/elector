@@ -173,12 +173,9 @@ func main() {
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
 
-		for {
-			select {
-			case sig := <-signals:
-				logger.Infof("exiting due to signal: %s", strings.ToUpper(sig.String()))
-				os.Exit(ExitOK)
-			}
+		for sig := range signals {
+			logger.Infof("exiting due to signal: %s", strings.ToUpper(sig.String()))
+			os.Exit(ExitOK)
 		}
 	}()
 
