@@ -6,6 +6,10 @@ go = "1.27.4"
 [env]
 K8S_VERSION = "1.33"
 
+[tasks."build"]
+description = "Build the elector binary"
+run = "go build -o bin/elector cmd/elector/*.go"
+
 [tasks."generate"]
 description = "Generate all code"
 run = "mise run generate:sqlc ::: generate:go"
