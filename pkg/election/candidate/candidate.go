@@ -151,12 +151,10 @@ func (c *Candidate) runCampaign(ctx context.Context) (*coordination_v1.Lease, er
 	defer c.campaignLock.Unlock()
 
 	lease := &coordination_v1.Lease{
-		ObjectMeta: meta_v1.ObjectMeta{
-			Name:      c.ElectionName.Name,
-			Namespace: c.ElectionName.Namespace,
-			OwnerReferences: []meta_v1.OwnerReference{
-				*c.ownerReference,
-			},
+		Name:      c.ElectionName.Name,
+		Namespace: c.ElectionName.Namespace,
+		OwnerReferences: []meta_v1.OwnerReference{
+			*c.ownerReference,
 		},
 		Spec: coordination_v1.LeaseSpec{
 			HolderIdentity: &c.hostname,

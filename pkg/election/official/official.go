@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/nais/elector/pkg/logging"
 	"github.com/sirupsen/logrus"
-	"net/http"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"time"
 )
 
 type official struct {

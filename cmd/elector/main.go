@@ -59,7 +59,6 @@ const (
 )
 
 func init() {
-
 	// Automatically read configuration options from environment variables.
 	// i.e. --metrics-address will be configurable using ELECTOR_METRICS_ADDRESS.
 	viper.SetEnvPrefix("elector")
@@ -144,7 +143,6 @@ func main() {
 		HealthProbeBindAddress: viper.GetString(ProbeAddress),
 		Logger:                 logr.New(&logrus2logr.Logrus2Logr{Logger: logger.WithField(logging.FieldComponent, "Controller")}),
 	})
-
 	if err != nil {
 		logger.Error(fmt.Errorf("failed to start controller-runtime manager: %w", err))
 		os.Exit(ExitManagerCreation)

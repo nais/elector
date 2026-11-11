@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	coordination_v1 "k8s.io/api/coordination/v1"
@@ -15,13 +19,10 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	testclock "k8s.io/utils/clock/testing"
 	"k8s.io/utils/pointer"
-	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"testing"
-	"time"
 )
 
 const (
@@ -150,16 +151,12 @@ func (rig *testRig) createForTest(ctx context.Context, obj client.Object) {
 
 func (rig *testRig) commonSetupForTest(ctx context.Context) {
 	rig.createForTest(ctx, &core_v1.Namespace{
-		ObjectMeta: meta_v1.ObjectMeta{
-			Name: namespace,
-		},
+		Name: namespace,
 	})
 	rig.createForTest(ctx, &core_v1.Pod{
-		ObjectMeta: meta_v1.ObjectMeta{
-			Name:      rig.hostname,
-			Namespace: namespace,
-			UID:       testUID,
-		},
+		Name:      rig.hostname,
+		Namespace: namespace,
+		UID:       testUID,
 		Spec: core_v1.PodSpec{
 			Containers: []core_v1.Container{
 				{
@@ -209,10 +206,8 @@ func TestCandidate_WinRaceToElection(t *testing.T) {
 
 	rig.commonSetupForTest(ctx)
 	lease := coordination_v1.Lease{
-		ObjectMeta: meta_v1.ObjectMeta{
-			Name:      rig.candidate.ElectionName.Name,
-			Namespace: rig.candidate.ElectionName.Namespace,
-		},
+		Name:      rig.candidate.ElectionName.Name,
+		Namespace: rig.candidate.ElectionName.Namespace,
 		Spec: coordination_v1.LeaseSpec{
 			HolderIdentity: pointer.String(notMe),
 			AcquireTime: &meta_v1.MicroTime{
