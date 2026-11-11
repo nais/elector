@@ -4,8 +4,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-      time: "09:00"
-      day: "monday"
     open-pull-requests-limit: 5
     groups:
       k8s:
@@ -13,17 +11,20 @@ updates:
           - k8s.io/api*
           - k8s.io/client-go
           - sigs.k8s.io/controller-runtime
+      go:
+        patterns:
+          - '*'
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-      time: "09:00"
-      day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      gha:
+        patterns:
+          - '*'
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
-      time: "09:00"
-      day: "monday"
     open-pull-requests-limit: 5
