@@ -94,12 +94,19 @@ func (o *official) sseHandler(ctx context.Context) func(w http.ResponseWriter, _
 func (o *official) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 
-	http.HandleFunc("/", o.leaderHandler)
-	http.HandleFunc("/sse", o.sseHandler(ctx))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", o.leaderHandler)
+	mux.HandleFunc("/sse", o.sseHandler(ctx))
+
+	srv := &http.Server{
+		Addr:              o.ElectionAddress,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
 
 	go func() {
 		o.Logger.Infof("Starting election service on %s", o.ElectionAddress)
-		err := http.ListenAndServe(o.ElectionAddress, nil)
+		err := srv.ListenAndServe()
 		o.Logger.Errorf("Failed to serve: %v", err)
 		cancel()
 	}()

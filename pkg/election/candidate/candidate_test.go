@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	testclock "k8s.io/utils/clock/testing"
-	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -98,7 +98,7 @@ func newTestRig(t *testing.T) (*testRig, error) {
 		t.Errorf("unable to get hostname: %v", err)
 		t.FailNow()
 	}
-	rig.hostname = hostname
+	rig.hostname = strings.ToLower(hostname)
 
 	rig.electionResults = make(chan string)
 
@@ -209,7 +209,7 @@ func TestCandidate_WinRaceToElection(t *testing.T) {
 		Name:      rig.candidate.ElectionName.Name,
 		Namespace: rig.candidate.ElectionName.Namespace,
 		Spec: coordination_v1.LeaseSpec{
-			HolderIdentity: pointer.String(notMe),
+			HolderIdentity: new(notMe),
 			AcquireTime: &meta_v1.MicroTime{
 				Time: time.Now(),
 			},

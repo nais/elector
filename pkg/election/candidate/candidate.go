@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -118,7 +119,7 @@ func (c *Candidate) checkLease(ctx context.Context) (ctrl.Result, error) {
 
 	c.Logger.Debugf("Checking Lease %v", c.ElectionName)
 	if lease, err = c.getLease(ctx); err != nil {
-		return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, err
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, err
 	}
 	if lease == nil {
 		c.Logger.Infof("No existing Lease, running campaign for %v", c.ElectionName)
@@ -126,7 +127,7 @@ func (c *Candidate) checkLease(ctx context.Context) (ctrl.Result, error) {
 		if err != nil {
 			err = fmt.Errorf("error during campaign: %w", err)
 			c.Logger.Error(err)
-			return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, err
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, err
 		}
 	}
 	c.updateElection(lease)
@@ -195,6 +196,8 @@ func (c *Candidate) setup(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to get hostname: %w", err)
 	}
+
+	hostname = strings.ToLower(hostname)
 
 	pod := &core_v1.Pod{}
 
